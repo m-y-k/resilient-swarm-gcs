@@ -82,27 +82,27 @@
 ---
 
 ### Phase 9: WebSocket Hook & Core State (Est. 30 min)
-- [ ] `useSwarmSocket.js` — Custom hook: STOMP client via SockJS, subscribe to all 4 topics, reconnection logic
-- [ ] `App.jsx` — Main layout with CSS Grid, state management for drones/mission/events/logs, initial snapshot fetch
+- [x] `useSwarmSocket.js` — Custom hook: STOMP client via SockJS, subscribe to all 4 topics, reconnection logic
+- [x] `App.jsx` — Main layout with CSS Grid, state management for drones/mission/events/logs, initial snapshot fetch
 
 ---
 
 ### Phase 10: Tactical Map (Est. 1.5 hours)
-- [ ] `TacticalMap.jsx` — Leaflet map with CartoDB dark tiles, centered on Greater Noida
-- [ ] `DroneMarker.jsx` — Custom DivIcon markers: role-based colors (blue=LEADER, green=FOLLOWER, orange=CANDIDATE, red=LOST), heading rotation, hover tooltips
-- [ ] `droneIcons.js` — SVG icons for drone types + role colors
-- [ ] Path trails — Polyline showing last 10 positions per drone
-- [ ] Leader pulsing animation — CSS pulsing circle on leader marker
-- [ ] Kill animation — Red flash when drone dies
+- [x] `TacticalMap.jsx` — Leaflet map with CartoDB dark tiles, centered on Greater Noida
+- [x] `DroneMarker.jsx` — Custom DivIcon markers: role-based colors (blue=LEADER, green=FOLLOWER, orange=CANDIDATE, red=LOST), heading rotation, hover tooltips
+- [x] `droneIcons.js` — SVG icons for drone types + role colors
+- [x] Path trails — Polyline showing last 10 positions per drone
+- [x] Leader pulsing animation — CSS pulsing circle on leader marker
+- [x] Kill animation — Red flash when drone dies
 
 ---
 
 ### Phase 11: Dashboard Panels (Est. 2 hours)
-- [ ] `SwarmStatusBar.jsx` — Top bar: mission status, leader ID, active count, election count, uptime
-- [ ] `ElectionLog.jsx` — **THE SHOWPIECE**: terminal-style panel, green monospace text, auto-scroll, color-coded log levels, throttled heartbeat display
-- [ ] `TelemetryPanel.jsx` — Right sidebar: per-drone cards with battery bars, altitude, speed, heading, status dots, scrollable
-- [ ] `ControlPanel.jsx` — Military-style buttons: DESTROY LEADER (red), KILL RANDOM (orange), START MISSION (green), RESET (grey), with confirmation dialogs and cooldowns
-- [ ] `DroneHealthGrid.jsx` — Horizontal row of 10 colored squares (green/yellow/red per drone status), leader has blue ring
+- [x] `SwarmStatusBar.jsx` — Top bar: mission status, leader ID, active count, election count, uptime
+- [x] `ElectionLog.jsx` — **THE SHOWPIECE**: terminal-style panel, green monospace text, auto-scroll, color-coded log levels, throttled heartbeat display
+- [x] `TelemetryPanel.jsx` — Right sidebar: per-drone cards with battery bars, altitude, speed, heading, status dots, scrollable
+- [x] `ControlPanel.jsx` — Military-style buttons: DESTROY LEADER (red), KILL RANDOM (orange), START MISSION (green), RESET (grey), with confirmation dialogs and cooldowns
+- [x] `DroneHealthGrid.jsx` — Horizontal row of 10 colored squares (green/yellow/red per drone status), leader has blue ring
 
 ---
 
