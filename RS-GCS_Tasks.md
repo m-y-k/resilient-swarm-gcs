@@ -72,12 +72,12 @@
 ## DAY 2 — Frontend + Docker + Polish
 
 ### Phase 8: Frontend Scaffolding (Est. 30 min)
-- [ ] Initialize Vite + React project
-- [ ] Install dependencies: `react-leaflet`, `leaflet`, `@stomp/stompjs`, `sockjs-client`
-- [ ] Set up Tailwind CSS with military dark theme
-- [ ] Import JetBrains Mono font from Google Fonts
-- [ ] Define CSS custom properties (color palette from spec)
-- [ ] Set up `index.css` with global dark theme
+- [x] Initialize Vite + React project
+- [x] Install dependencies: `react-leaflet`, `leaflet`, `@stomp/stompjs`, `sockjs-client`
+- [x] Set up Tailwind CSS with military dark theme
+- [x] Import JetBrains Mono font from Google Fonts
+- [x] Define CSS custom properties (color palette from spec)
+- [x] Set up `index.css` with global dark theme
 
 ---
 
