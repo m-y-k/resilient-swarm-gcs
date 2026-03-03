@@ -8,21 +8,21 @@
 ## DAY 1 — Backend + Simulator (Data Pipeline)
 
 ### Phase 1: Project Scaffolding (Est. 30 min)
-- [ ] Create root project structure (`backend/`, `simulator/`, `frontend/`)
-- [ ] Initialize Spring Boot project with `pom.xml` (Java 21, Spring Web, Spring WebSocket, Lombok)
-- [ ] Create `application.yml` with virtual threads, server port, and RSGCS config properties
-- [ ] Set up `.gitignore` (Java, Python, Node artifacts)
-- [ ] Initialize Git repo
+- [x] Create root project structure (`backend/`, `simulator/`, `frontend/`)
+- [x] Initialize Spring Boot project with `pom.xml` (Java 21, Spring Web, Spring WebSocket, Lombok)
+- [x] Create `application.yml` with virtual threads, server port, and RSGCS config properties
+- [x] Set up `.gitignore` (Java, Python, Node artifacts)
+- [x] Initialize Git repo
 
 ---
 
 ### Phase 2: Backend Models (Est. 30 min)
-- [ ] `DroneRole.java` — Enum: `LEADER`, `FOLLOWER`, `CANDIDATE`, `LOST`
-- [ ] `DroneType.java` — Enum: `SURVEILLANCE`, `LOGISTICS`, `STRIKE`
-- [ ] `DroneState.java` — Core drone data model with all fields (id, position, battery, role, heartbeat, etc.)
-- [ ] `TelemetryPacket.java` — Incoming telemetry from Python drones
-- [ ] `ElectionEvent.java` — Election log entry
-- [ ] `MissionState.java` — Swarm mission status
+- [x] `DroneRole.java` — Enum: `LEADER`, `FOLLOWER`, `CANDIDATE`, `LOST`
+- [x] `DroneType.java` — Enum: `SURVEILLANCE`, `LOGISTICS`, `STRIKE`
+- [x] `DroneState.java` — Core drone data model with all fields (id, position, battery, role, heartbeat, etc.)
+- [x] `TelemetryPacket.java` — Incoming telemetry from Python drones
+- [x] `ElectionEvent.java` — Election log entry
+- [x] `MissionState.java` — Swarm mission status
 
 ---
 
