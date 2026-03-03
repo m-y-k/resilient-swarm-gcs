@@ -61,11 +61,11 @@
 ---
 
 ### Phase 7: End-to-End Data Flow Test (Est. 30 min)
-- [ ] Run backend + simulator together
-- [ ] Verify backend receives telemetry from all 10 drones
-- [ ] Verify drones appear in `/api/swarm/snapshot`
-- [ ] Test kill flow: `POST /api/command/kill-leader` → verify election in backend logs
-- [ ] Verify election completes in <500ms
+- [x] Run backend + simulator together
+- [x] Verify backend receives telemetry from all 10 drones
+- [x] Verify drones appear in `/api/swarm/snapshot`
+- [x] Test kill flow: `POST /api/command/kill-leader` → verify election in backend logs
+- [x] Verify election completes in <500ms
 
 ---
 

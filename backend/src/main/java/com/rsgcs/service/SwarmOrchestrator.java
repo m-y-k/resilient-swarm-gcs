@@ -24,6 +24,9 @@ public class SwarmOrchestrator {
     private final SimpMessagingTemplate messagingTemplate;
     private final List<ElectionEvent> eventLog = Collections.synchronizedList(new ArrayList<>());
 
+    // Track explicitly killed drones — ignore their telemetry
+    private final Set<Integer> killedDrones = ConcurrentHashMap.newKeySet();
+
     // Track last N positions for path trails on the map
     private final Map<Integer, List<double[]>> positionHistory = new ConcurrentHashMap<>();
     private static final int MAX_TRAIL_LENGTH = 10;
@@ -37,6 +40,11 @@ public class SwarmOrchestrator {
      */
     public void handleTelemetry(TelemetryPacket packet) {
         int id = packet.getSystemId();
+
+        // Ignore telemetry from explicitly killed drones
+        if (killedDrones.contains(id)) {
+            return;
+        }
 
         DroneState drone = droneRegistry.computeIfAbsent(id, droneId -> {
             DroneState newDrone = DroneState.builder()
@@ -111,6 +119,7 @@ public class SwarmOrchestrator {
         boolean wasLeader = drone.getRole() == DroneRole.LEADER;
         drone.setStatus("LOST");
         drone.setRole(DroneRole.LOST);
+        killedDrones.add(droneId);
 
         String msg = String.format("[KILL] Drone_%d TERMINATED%s", droneId, wasLeader ? " (WAS LEADER)" : "");
         log.warn(msg);
@@ -176,6 +185,10 @@ public class SwarmOrchestrator {
         return eventLog;
     }
 
+    public Set<Integer> getKilledDroneIds() {
+        return killedDrones;
+    }
+
     /**
      * Broadcast a log line to the frontend terminal.
      */
@@ -217,6 +230,7 @@ public class SwarmOrchestrator {
         droneRegistry.clear();
         positionHistory.clear();
         eventLog.clear();
+        killedDrones.clear();
         missionState.setStatus("IDLE");
         missionState.setCurrentLeaderId(0);
         missionState.setActiveDroneCount(0);
