@@ -52,10 +52,10 @@
 ---
 
 ### Phase 6: Python Simulator (Est. 2 hours)
-- [ ] `requirements.txt` — `aiohttp`
-- [ ] `swarm_patterns.py` — `grid_search()` function: divide 500m×500m area into drone strips with waypoints
-- [ ] `drone.py` — `SimulatedDrone` class: movement toward waypoints, battery drain, telemetry POST to backend, `kill()` method
-- [ ] `main.py` — Entry point: spawn N drone coroutines, command listener, graceful shutdown
+- [x] `requirements.txt` — `aiohttp`
+- [x] `swarm_patterns.py` — `grid_search()` function: divide 500m×500m area into drone strips with waypoints
+- [x] `drone.py` — `SimulatedDrone` class: movement toward waypoints, battery drain, telemetry POST to backend, `kill()` method
+- [x] `main.py` — Entry point: spawn N drone coroutines, command listener, graceful shutdown
 - [ ] *(Optional)* `mavlink_emulator.py` — MAVLink-style packet wrapper (polish feature, skip if short on time)
 
 ---
