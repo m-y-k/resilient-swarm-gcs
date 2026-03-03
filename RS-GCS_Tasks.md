@@ -35,11 +35,11 @@
 ---
 
 ### Phase 4: Backend Controllers & WebSocket (Est. 1 hour)
-- [ ] `WebSocketConfig.java` — STOMP over SockJS config, topics: `/topic/drones`, `/topic/events`, `/topic/mission`, `/topic/logs`
-- [ ] `TelemetryController.java` — `POST /api/telemetry` and `/api/telemetry/batch`
-- [ ] `CommandController.java` — `POST /api/command/kill/{id}`, `kill-leader`, `start-mission`, `reset` + `GET /api/swarm/snapshot`
-- [ ] `DashboardWebSocket.java` — STOMP message broadcasting logic
-- [ ] CORS configuration — Allow all origins for dev
+- [x] `WebSocketConfig.java` — STOMP over SockJS config, topics: `/topic/drones`, `/topic/events`, `/topic/mission`, `/topic/logs`
+- [x] `TelemetryController.java` — `POST /api/telemetry` and `/api/telemetry/batch`
+- [x] `CommandController.java` — `POST /api/command/kill/{id}`, `kill-leader`, `start-mission`, `reset` + `GET /api/swarm/snapshot`
+- [x] `DashboardWebSocket.java` — STOMP message broadcasting logic
+- [x] CORS configuration — Allow all origins for dev
 
 ---
 
