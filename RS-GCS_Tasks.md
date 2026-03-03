@@ -44,10 +44,10 @@
 ---
 
 ### Phase 5: Backend Smoke Test (Est. 30 min)
-- [ ] Build and run Spring Boot app
-- [ ] Test `POST /api/telemetry` with a manual JSON payload (Postman/curl)
-- [ ] Test `GET /api/swarm/snapshot` returns drone data
-- [ ] Verify STOMP WebSocket endpoint `/ws` is accessible
+- [x] Build and run Spring Boot app
+- [x] Test `POST /api/telemetry` with a manual JSON payload (Postman/curl)
+- [x] Test `GET /api/swarm/snapshot` returns drone data
+- [x] Verify STOMP WebSocket endpoint `/ws` is accessible
 
 ---
 
