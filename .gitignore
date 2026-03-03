@@ -1,0 +1,50 @@
+# === Java / Maven ===
+backend/target/
+*.class
+*.jar
+*.war
+*.log
+*.iml
+.idea/
+*.swp
+*~
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+simulator/venv/
+simulator/.venv/
+
+# === Node / React ===
+frontend/node_modules/
+frontend/dist/
+frontend/.cache/
+*.tsbuildinfo
+
+# === Docker ===
+docker-compose.override.yml
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === IDE ===
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# === Environment ===
+.env
+.env.local
+.env.*.local

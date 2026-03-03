@@ -1,0 +1,19 @@
+spring:
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: 8080
+
+rsgcs:
+  heartbeat-timeout-ms: 500
+  heartbeat-check-interval-ms: 200
+  max-drones: 10
+  election-timeout-ms: 300
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
