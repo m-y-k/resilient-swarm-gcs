@@ -27,10 +27,10 @@
 ---
 
 ### Phase 3: Backend Core Services (Est. 2 hours)
-- [ ] `SwarmOrchestrator.java` — Central brain: ConcurrentHashMap registry, `handleTelemetry()`, `killDrone()`, `getSwarmSnapshot()`
-- [ ] `HeartbeatMonitor.java` — `@Scheduled` task every 200ms, 3-strike rule (ACTIVE → STALE @500ms → LOST @1000ms), triggers election on leader loss
-- [ ] `LeaderElectionService.java` — **THE MONEY CLASS**: Bully Algorithm with dramatic logged steps, quorum check, sub-500ms election
-- [ ] `MissionCoordinator.java` — Grid search pattern generator centered on Greater Noida (28.4595, 77.5021)
+- [x] `SwarmOrchestrator.java` — Central brain: ConcurrentHashMap registry, `handleTelemetry()`, `killDrone()`, `getSwarmSnapshot()`
+- [x] `HeartbeatMonitor.java` — `@Scheduled` task every 200ms, 3-strike rule (ACTIVE → STALE @500ms → LOST @1000ms), triggers election on leader loss
+- [x] `LeaderElectionService.java` — **THE MONEY CLASS**: Bully Algorithm with dramatic logged steps, quorum check, sub-500ms election
+- [x] `MissionCoordinator.java` — Grid search pattern generator centered on Greater Noida (28.4595, 77.5021)
 
 ---
 
