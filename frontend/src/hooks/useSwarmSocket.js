@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
 const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:8080/ws';
@@ -8,6 +7,7 @@ const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:8080/ws';
 /**
  * Custom hook: STOMP WebSocket connection to Spring Boot backend.
  * Subscribes to /topic/drones, /topic/events, /topic/mission, /topic/logs
+ * Provides command helpers for missions, obstacles, and waypoints.
  */
 export default function useSwarmSocket() {
     const [drones, setDrones] = useState({});
@@ -16,6 +16,7 @@ export default function useSwarmSocket() {
     const [logs, setLogs] = useState([]);
     const [isConnected, setIsConnected] = useState(false);
     const [trails, setTrails] = useState({});
+    const [obstacles, setObstacles] = useState([]);
     const clientRef = useRef(null);
 
     // Fetch initial snapshot
@@ -35,9 +36,20 @@ export default function useSwarmSocket() {
         }
     }, []);
 
+    // Fetch obstacles from backend
+    const fetchObstacles = useCallback(async () => {
+        try {
+            const res = await fetch(`${BACKEND_URL}/api/obstacles`);
+            const data = await res.json();
+            if (Array.isArray(data)) setObstacles(data);
+        } catch (err) {
+            console.warn('Failed to fetch obstacles:', err);
+        }
+    }, []);
+
     useEffect(() => {
         const client = new Client({
-            webSocketFactory: () => new SockJS(WS_URL),
+            brokerURL: 'ws://localhost:8080/ws',
             reconnectDelay: 3000,
             heartbeatIncoming: 4000,
             heartbeatOutgoing: 4000,
@@ -46,6 +58,7 @@ export default function useSwarmSocket() {
                 console.log('[WS] Connected to RS-GCS');
                 setIsConnected(true);
                 fetchSnapshot();
+                fetchObstacles();
 
                 // Subscribe to drone state updates
                 client.subscribe('/topic/drones', (message) => {
@@ -67,7 +80,7 @@ export default function useSwarmSocket() {
                         const event = JSON.parse(message.body);
                         setEventLog(prev => {
                             const updated = [...prev, event];
-                            return updated.length > 200 ? updated.slice(-200) : updated;
+                            return updated.length > 500 ? updated.slice(-500) : updated;
                         });
                     } catch (e) { console.warn('Parse error /topic/events:', e); }
                 });
@@ -85,7 +98,7 @@ export default function useSwarmSocket() {
                         const log = JSON.parse(message.body);
                         setLogs(prev => {
                             const updated = [...prev, log];
-                            return updated.length > 200 ? updated.slice(-200) : updated;
+                            return updated.length > 500 ? updated.slice(-500) : updated;
                         });
                     } catch (e) { console.warn('Parse error /topic/logs:', e); }
                 });
@@ -107,12 +120,17 @@ export default function useSwarmSocket() {
         return () => {
             client.deactivate();
         };
-    }, [fetchSnapshot]);
+    }, [fetchSnapshot, fetchObstacles]);
 
     // Command helpers
-    const sendCommand = useCallback(async (endpoint, method = 'POST') => {
+    const sendCommand = useCallback(async (endpoint, method = 'POST', body = null) => {
         try {
-            await fetch(`${BACKEND_URL}${endpoint}`, { method });
+            const opts = { method };
+            if (body) {
+                opts.headers = { 'Content-Type': 'application/json' };
+                opts.body = JSON.stringify(body);
+            }
+            await fetch(`${BACKEND_URL}${endpoint}`, opts);
         } catch (err) {
             console.error('Command failed:', err);
         }
@@ -121,11 +139,37 @@ export default function useSwarmSocket() {
     const killLeader = useCallback(() => sendCommand('/api/command/kill-leader'), [sendCommand]);
     const killRandom = useCallback(() => sendCommand('/api/command/kill-random'), [sendCommand]);
     const startMission = useCallback(() => sendCommand('/api/command/start-mission'), [sendCommand]);
-    const resetSwarm = useCallback(() => sendCommand('/api/command/reset'), [sendCommand]);
+    const resetSwarm = useCallback(() => {
+        sendCommand('/api/command/reset');
+        fetchObstacles(); // Refresh obstacles after reset
+    }, [sendCommand, fetchObstacles]);
+
+    // Deploy mission waypoints
+    const deployMission = useCallback((waypoints) => {
+        return sendCommand('/api/mission/waypoints', 'POST', { waypoints });
+    }, [sendCommand]);
+
+    // Add obstacle
+    const addObstacle = useCallback(async (obstacle) => {
+        await sendCommand('/api/obstacles', 'POST', obstacle);
+        fetchObstacles(); // Refresh list
+    }, [sendCommand, fetchObstacles]);
+
+    // Remove obstacle
+    const removeObstacle = useCallback(async (obstacleId) => {
+        await sendCommand(`/api/obstacles/${obstacleId}`, 'DELETE');
+        fetchObstacles(); // Refresh list
+    }, [sendCommand, fetchObstacles]);
+
+    // Set spawn point
+    const setSpawnPoint = useCallback(async (lat, lon) => {
+        await sendCommand('/api/spawn-point', 'POST', { latitude: lat, longitude: lon });
+    }, [sendCommand]);
 
     return {
-        drones, missionState, eventLog, logs, trails,
+        drones, missionState, eventLog, logs, trails, obstacles,
         isConnected,
         killLeader, killRandom, startMission, resetSwarm,
+        deployMission, addObstacle, removeObstacle, setSpawnPoint,
     };
 }

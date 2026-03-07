@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * Core drone data model — holds all state for a single drone in the swarm.
@@ -29,6 +30,12 @@ public class DroneState {
     private Instant lastHeartbeat; // last received heartbeat timestamp
     private String status; // "ACTIVE", "STALE", "LOST"
     private long sequenceNumber; // increments with each packet
+
+    // Pathfinding: intended route including obstacle detour points
+    private List<double[]> plannedPath;
+
+    // The index of the waypoint the drone is currently navigating to
+    private int currentWaypointIndex;
 
     /**
      * Assigns DroneType based on ID per spec:

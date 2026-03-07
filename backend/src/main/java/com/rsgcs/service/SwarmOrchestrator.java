@@ -2,12 +2,14 @@ package com.rsgcs.service;
 
 import com.rsgcs.model.*;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
 /**
@@ -22,6 +24,8 @@ public class SwarmOrchestrator {
     private final Map<Integer, DroneState> droneRegistry = new ConcurrentHashMap<>();
     private final MissionState missionState = MissionState.createIdle(10);
     private final SimpMessagingTemplate messagingTemplate;
+    private final LeaderElectionService electionService;
+    private final PathfindingService pathfindingService;
     private final List<ElectionEvent> eventLog = Collections.synchronizedList(new ArrayList<>());
 
     // Track explicitly killed drones — ignore their telemetry
@@ -31,8 +35,26 @@ public class SwarmOrchestrator {
     private final Map<Integer, List<double[]>> positionHistory = new ConcurrentHashMap<>();
     private static final int MAX_TRAIL_LENGTH = 10;
 
-    public SwarmOrchestrator(SimpMessagingTemplate messagingTemplate) {
+    // Obstacles — pre-loaded with Greater Noida landmarks
+    private final List<Obstacle> obstacles = new CopyOnWriteArrayList<>(createDefaultObstacles());
+
+    // Per-drone waypoints (calculated from operator mission waypoints)
+    private final Map<Integer, List<double[]>> droneWaypoints = new ConcurrentHashMap<>();
+
+    // Track last planned path calculation to prevent STOMP thread pool exhaustion
+    private final Map<Integer, Instant> lastPathCalc = new ConcurrentHashMap<>();
+
+    // Operator-configurable spawn point for drone formation center
+    private volatile double[] spawnPoint = null;
+
+    private static final double METERS_PER_DEG_LAT = 111_320.0;
+
+    public SwarmOrchestrator(SimpMessagingTemplate messagingTemplate,
+            @Lazy LeaderElectionService electionService,
+            PathfindingService pathfindingService) {
         this.messagingTemplate = messagingTemplate;
+        this.electionService = electionService;
+        this.pathfindingService = pathfindingService;
     }
 
     /**
@@ -87,6 +109,7 @@ public class SwarmOrchestrator {
         drone.setBatteryPercent(packet.getBatteryPercent());
         drone.setLastHeartbeat(Instant.now());
         drone.setSequenceNumber(packet.getSequenceNumber());
+        drone.setCurrentWaypointIndex(packet.getCurrentWaypointIndex());
         if (!"LOST".equals(drone.getStatus())) {
             drone.setStatus("ACTIVE");
         }
@@ -102,6 +125,33 @@ public class SwarmOrchestrator {
         // Update active drone count
         missionState.setActiveDroneCount((int) droneRegistry.values().stream()
                 .filter(d -> !"LOST".equals(d.getStatus())).count());
+
+        // Compute planned path through obstacles using A* grid pathfinding
+        if (!obstacles.isEmpty() && drone.getStatus().equals("ACTIVE")) {
+            List<double[]> myWaypoints = droneWaypoints.get(id);
+            if (myWaypoints != null && !myWaypoints.isEmpty()
+                    && packet.getCurrentWaypointIndex() < myWaypoints.size()) {
+                double[] nextWp = myWaypoints.get(packet.getCurrentWaypointIndex());
+
+                Instant lastCalc = lastPathCalc.get(id);
+                Instant now = Instant.now();
+                if (lastCalc == null || java.time.Duration.between(lastCalc, now).toMillis() > 2000) {
+                    lastPathCalc.put(id, now);
+                    Thread.startVirtualThread(() -> {
+                        try {
+                            List<double[]> plannedPath = pathfindingService.calculatePlannedPath(
+                                    drone.getLatitude(), drone.getLongitude(),
+                                    nextWp[0], nextWp[1], obstacles);
+                            drone.setPlannedPath(plannedPath);
+                        } catch (Exception e) {
+                            log.error("Pathfinding error for Drone_{}", id, e);
+                        }
+                    });
+                }
+            } else {
+                drone.setPlannedPath(null);
+            }
+        }
 
         // Broadcast to frontend (throttled — only via scheduled broadcast, not per
         // packet)
@@ -132,6 +182,12 @@ public class SwarmOrchestrator {
         // Broadcast the kill event
         messagingTemplate.convertAndSend("/topic/drones", getSwarmSnapshot());
         messagingTemplate.convertAndSend("/topic/mission", missionState);
+
+        // Trigger election if the killed drone was the leader
+        if (wasLeader && !electionService.isElectionInProgress()) {
+            log.warn("[KILL] Leader killed — triggering emergency election");
+            Thread.startVirtualThread(() -> electionService.startElection());
+        }
 
         return wasLeader ? "LEADER_KILLED" : "DRONE_KILLED";
     }
@@ -185,6 +241,130 @@ public class SwarmOrchestrator {
         return eventLog;
     }
 
+    // ── Spawn Point Management ─────────────────────────────────
+
+    public double[] getSpawnPoint() {
+        return spawnPoint;
+    }
+
+    public void setSpawnPoint(double latitude, double longitude) {
+        this.spawnPoint = new double[] { latitude, longitude };
+        String msg = String.format("[SPAWN] Spawn point set to (%.6f, %.6f)", latitude, longitude);
+        log.info(msg);
+        broadcastLog("INFO", msg);
+    }
+
+    // ── Obstacle Management ────────────────────────────────────
+
+    public List<Obstacle> getObstacles() {
+        return obstacles;
+    }
+
+    public void addObstacle(Obstacle obstacle) {
+        obstacles.add(obstacle);
+        log.info("[OBSTACLE] Added: {} ({}m radius) at ({}, {})",
+                obstacle.getName(), obstacle.getRadius(), obstacle.getLatitude(), obstacle.getLongitude());
+        broadcastLog("INFO", String.format("[OBSTACLE] Added: %s — %s", obstacle.getName(), obstacle.getType()));
+        messagingTemplate.convertAndSend("/topic/mission", missionState);
+    }
+
+    public boolean removeObstacle(String obstacleId) {
+        boolean removed = obstacles.removeIf(o -> o.getId().equals(obstacleId));
+        if (removed) {
+            log.info("[OBSTACLE] Removed: {}", obstacleId);
+            broadcastLog("INFO", String.format("[OBSTACLE] Removed obstacle %s", obstacleId));
+        }
+        return removed;
+    }
+
+    // ── Waypoint / Mission Planning ────────────────────────────
+
+    public Map<Integer, List<double[]>> getDroneWaypoints() {
+        return droneWaypoints;
+    }
+
+    /**
+     * Set mission waypoints from operator click-to-place planning.
+     * Distributes offset paths to each drone for formation flying.
+     */
+    public void setMissionWaypoints(List<Waypoint> waypoints) {
+        missionState.setMissionWaypoints(waypoints);
+        missionState.setMissionPattern("CUSTOM");
+
+        // Build the base path from waypoints (ordered)
+        waypoints.sort(Comparator.comparingInt(Waypoint::getOrder));
+        List<double[]> basePath = waypoints.stream()
+                .map(w -> new double[] { w.getLatitude(), w.getLongitude() })
+                .collect(Collectors.toList());
+
+        if (basePath.isEmpty())
+            return;
+
+        // Distribute to drones with formation offsets
+        int leaderId = getCurrentLeaderId();
+        List<DroneState> activeDrones = droneRegistry.values().stream()
+                .filter(d -> !"LOST".equals(d.getStatus()))
+                .sorted(Comparator.comparingInt(DroneState::getDroneId))
+                .collect(Collectors.toList());
+
+        int index = 0;
+        for (DroneState drone : activeDrones) {
+            if (drone.getDroneId() == leaderId) {
+                // Leader flies the exact path
+                droneWaypoints.put(drone.getDroneId(), new ArrayList<>(basePath));
+            } else {
+                // Followers get offset paths: ±15m, ±30m, ±45m (ensure gaps > 5m)
+                index++;
+                int side = (index % 2 == 0) ? 1 : -1;
+                double offsetMeters = 15.0 * ((index + 1) / 2);
+                List<double[]> offsetPath = calculateOffsetPath(basePath, offsetMeters * side);
+                droneWaypoints.put(drone.getDroneId(), offsetPath);
+            }
+        }
+
+        String msg = String.format("[MISSION] Operator waypoints deployed — %d waypoints, %d drones in formation",
+                waypoints.size(), activeDrones.size());
+        log.info(msg);
+        broadcastLog("SUCCESS", msg);
+        messagingTemplate.convertAndSend("/topic/mission", missionState);
+        broadcastSwarmState();
+    }
+
+    /**
+     * Calculate a parallel offset path for formation flying.
+     */
+    private List<double[]> calculateOffsetPath(List<double[]> basePath, double offsetMeters) {
+        List<double[]> offsetPath = new ArrayList<>();
+        for (int i = 0; i < basePath.size(); i++) {
+            double[] current = basePath.get(i);
+            double[] next = (i < basePath.size() - 1) ? basePath.get(i + 1) : basePath.get(i);
+            double[] prev = (i > 0) ? basePath.get(i - 1) : basePath.get(i);
+
+            // Direction vector
+            double dx = next[1] - prev[1];
+            double dy = next[0] - prev[0];
+            double len = Math.sqrt(dx * dx + dy * dy);
+            if (len == 0) {
+                offsetPath.add(current.clone());
+                continue;
+            }
+
+            // Perpendicular vector
+            double perpX = -dy / len;
+            double perpY = dx / len;
+
+            // Convert meters to degrees
+            double offsetLat = (offsetMeters * perpY) / METERS_PER_DEG_LAT;
+            double offsetLon = (offsetMeters * perpX) / (METERS_PER_DEG_LAT * Math.cos(Math.toRadians(current[0])));
+
+            offsetPath.add(new double[] {
+                    current[0] + offsetLat,
+                    current[1] + offsetLon
+            });
+        }
+        return offsetPath;
+    }
+
     public Set<Integer> getKilledDroneIds() {
         return killedDrones;
     }
@@ -231,12 +411,20 @@ public class SwarmOrchestrator {
         positionHistory.clear();
         eventLog.clear();
         killedDrones.clear();
+        droneWaypoints.clear();
         missionState.setStatus("IDLE");
         missionState.setCurrentLeaderId(0);
         missionState.setActiveDroneCount(0);
         missionState.setElectionCount(0);
         missionState.setMissionStartTime(null);
         missionState.setLastElectionTime(null);
+        missionState.setMissionWaypoints(new ArrayList<>());
+        missionState.setMissionPattern(null);
+        // Reset obstacles to defaults
+        obstacles.clear();
+        obstacles.addAll(createDefaultObstacles());
+        // Reset spawn point
+        spawnPoint = null;
         log.info("[RESET] All swarm state cleared");
         broadcastLog("INFO", "[RESET] Swarm state reset — awaiting drone connections");
         messagingTemplate.convertAndSend("/topic/mission", missionState);
@@ -271,5 +459,27 @@ public class SwarmOrchestrator {
         broadcastLog("SUCCESS", msg);
         messagingTemplate.convertAndSend("/topic/mission", missionState);
         broadcastSwarmState();
+    }
+
+    // ── Default Greater Noida Obstacles ────────────────────────
+
+    private static List<Obstacle> createDefaultObstacles() {
+        return List.of(
+                Obstacle.builder().id("obs_1").name("Gaur City Mall").type("BUILDING")
+                        .latitude(28.4585).longitude(77.5005).radius(80).height(45).build(),
+                Obstacle.builder().id("obs_2").name("Pari Chowk").type("RESTRICTED_ZONE")
+                        .latitude(28.4650).longitude(77.5040).radius(150).height(0).build(),
+                Obstacle.builder().id("obs_3").name("Gaur World SmartStreet Mall").type("BUILDING")
+                        .latitude(28.4563).longitude(77.4982).radius(60).height(35).build(),
+                Obstacle.builder().id("obs_4").name("JP Aman Society Tower").type("BUILDING")
+                        .latitude(28.4620).longitude(77.5060).radius(50).height(60).build(),
+                Obstacle.builder().id("obs_5").name("Noida-Greater Noida Expressway Overpass").type("INFRASTRUCTURE")
+                        .latitude(28.4600).longitude(77.5025).radius(40).height(15).build(),
+                Obstacle.builder().id("obs_6").name("Cell Tower Cluster (Sector 16)").type("RF_HAZARD")
+                        .latitude(28.4575).longitude(77.5050).radius(60).height(50).build(),
+                Obstacle.builder().id("obs_7").name("Water Tank (Sector 12)").type("STRUCTURE")
+                        .latitude(28.4640).longitude(77.4990).radius(25).height(30).build(),
+                Obstacle.builder().id("obs_8").name("Tree Line (Park Belt)").type("VEGETATION")
+                        .latitude(28.4610).longitude(77.4970).radius(100).height(12).build());
     }
 }

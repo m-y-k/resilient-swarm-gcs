@@ -1,0 +1,43 @@
+services:
+  # ── Spring Boot Backend (Orchestrator) ──
+  backend:
+    build: ./backend
+    container_name: rsgcs-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=default
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8080/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ── Python Drone Simulator ──
+  simulator:
+    build: ./simulator
+    container_name: rsgcs-simulator
+    environment:
+      - BACKEND_URL=http://backend:8080
+      - NUM_DRONES=10
+      - HEARTBEAT_INTERVAL_MS=100
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── React Frontend (Vite Dev Server) ──
+  frontend:
+    build: ./frontend
+    container_name: rsgcs-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_BACKEND_URL=http://localhost:8080
+      - VITE_WS_URL=ws://localhost:8080/ws
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped

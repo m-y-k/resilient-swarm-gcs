@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
+import { TYPE_COLORS } from '../utils/droneIcons';
 
 /**
  * Horizontal row of 10 drone health boxes — instant visual swarm overview.
- * Green = ACTIVE, Yellow = STALE, Red = LOST. Leader has blue ring.
+ * ACTIVE = TYPE color (cyan/amber/magenta), STALE = yellow, LOST = red. Leader has blue ring.
  */
 export default function DroneHealthGrid({ drones }) {
     const droneList = useMemo(
@@ -36,8 +37,11 @@ export default function DroneHealthGrid({ drones }) {
                 const id = idx + 1;
                 const status = drone?.status || 'NONE';
                 const isLeader = drone?.role === 'LEADER';
+
+                // Use TYPE color for ACTIVE drones, status colors for STALE/LOST
+                const droneType = (drone?.droneType || '').toUpperCase();
                 const bgColor = !drone ? '#1e293b'
-                    : status === 'ACTIVE' ? 'var(--accent-green)'
+                    : status === 'ACTIVE' ? (TYPE_COLORS[droneType] || 'var(--accent-green)')
                         : status === 'STALE' ? 'var(--accent-yellow)'
                             : 'var(--accent-red)';
 

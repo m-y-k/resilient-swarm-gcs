@@ -25,5 +25,6 @@ public class TelemetryPacket {
     private double heading;
     private double speed;
     private double batteryPercent;
+    private int currentWaypointIndex; // index of the waypoint the drone is navigating to
     private long timestamp; // epoch millis
 }

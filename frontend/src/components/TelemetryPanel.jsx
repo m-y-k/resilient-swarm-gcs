@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { getRoleColor, TYPE_LABELS } from '../utils/droneIcons';
+import { getRoleColor, getDroneColor, TYPE_LABELS } from '../utils/droneIcons';
 
 /**
  * Right sidebar — per-drone telemetry cards with battery bars, altitude, speed.
@@ -46,7 +46,7 @@ export default function TelemetryPanel({ drones }) {
 }
 
 const DroneCard = React.memo(function DroneCard({ drone }) {
-    const roleColor = getRoleColor(drone.role);
+    const roleColor = getDroneColor(drone);
     const isLost = drone.status === 'LOST' || drone.role === 'LOST';
     const isLeader = drone.role === 'LEADER';
     const batteryColor = drone.batteryPercent > 50 ? 'var(--accent-green)'

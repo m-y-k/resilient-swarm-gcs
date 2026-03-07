@@ -13,17 +13,28 @@ import java.util.Map;
  * Swarm snapshot endpoint for frontend initial load.
  */
 @RestController
-@RequestMapping("/api/swarm")
+@RequestMapping("/api")
 @RequiredArgsConstructor
 public class SwarmController {
 
     private final SwarmOrchestrator orchestrator;
 
     /**
+     * Simple health check endpoint.
+     * Returns service status for monitoring and connectivity checks.
+     */
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, String>> health() {
+        return ResponseEntity.ok(Map.of(
+                "status", "UP",
+                "service", "rs-gcs-backend"));
+    }
+
+    /**
      * Full swarm state snapshot — drones, mission, trails.
      * Called by frontend on initial page load.
      */
-    @GetMapping("/snapshot")
+    @GetMapping("/swarm/snapshot")
     public ResponseEntity<Map<String, Object>> getSnapshot() {
         return ResponseEntity.ok(orchestrator.getSwarmSnapshot());
     }

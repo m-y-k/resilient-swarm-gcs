@@ -3,46 +3,64 @@
  */
 
 export const ROLE_COLORS = {
-    LEADER: '#3b82f6',
-    FOLLOWER: '#22c55e',
-    CANDIDATE: '#f97316',
-    LOST: '#ef4444',
+  LEADER: '#3b82f6',
+  FOLLOWER: '#22c55e',
+  CANDIDATE: '#f97316',
+  LOST: '#ef4444',
 };
 
 export const TYPE_LABELS = {
-    SURVEILLANCE: '🔍',
-    LOGISTICS: '📦',
-    STRIKE: '⚔️',
+  SURVEILLANCE: '🔍',
+  LOGISTICS: '📦',
+  STRIKE: '⚔️',
+};
+
+export const TYPE_COLORS = {
+  SURVEILLANCE: '#06b6d4',
+  LOGISTICS: '#f59e0b',
+  STRIKE: '#ec4899',
 };
 
 export const STATUS_COLORS = {
-    ACTIVE: '#22c55e',
-    STALE: '#eab308',
-    LOST: '#ef4444',
+  ACTIVE: '#22c55e',
+  STALE: '#eab308',
+  LOST: '#ef4444',
 };
 
 export function getRoleClass(role) {
-    return (role || '').toLowerCase();
+  return (role || '').toLowerCase();
 }
 
 export function getStatusColor(status) {
-    return STATUS_COLORS[status] || STATUS_COLORS.ACTIVE;
+  return STATUS_COLORS[status] || STATUS_COLORS.ACTIVE;
 }
 
 export function getRoleColor(role) {
-    return ROLE_COLORS[role] || ROLE_COLORS.FOLLOWER;
+  return ROLE_COLORS[role] || ROLE_COLORS.FOLLOWER;
+}
+
+export function getDroneColor(drone) {
+  if (!drone) return ROLE_COLORS.FOLLOWER;
+  if (drone.role === 'LEADER') return ROLE_COLORS.LEADER;
+  if (drone.role === 'LOST' || drone.status === 'LOST') return ROLE_COLORS.LOST;
+
+  const type = (drone.droneType || '').toUpperCase();
+  if (TYPE_COLORS[type]) {
+    return TYPE_COLORS[type];
+  }
+  return getRoleColor(drone.role);
 }
 
 /**
  * Create a Leaflet DivIcon HTML string for a drone marker.
  */
 export function createDroneIconHtml(drone) {
-    const color = getRoleColor(drone.role);
-    const size = drone.role === 'LEADER' ? 28 : 22;
-    const cls = getRoleClass(drone.role);
-    const rotation = drone.heading || 0;
+  const color = getDroneColor(drone);
+  const size = drone.role === 'LEADER' ? 28 : 22;
+  const cls = getRoleClass(drone.role);
+  const rotation = drone.heading || 0;
 
-    return `
+  return `
     <div class="drone-marker ${cls}" style="
       width: ${size}px;
       height: ${size}px;

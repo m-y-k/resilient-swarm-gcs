@@ -82,20 +82,7 @@ public class LeaderElectionService {
                 return;
             }
 
-            // ── STEP 3: QUORUM CHECK (Raft-lite) ──
-            int totalDrones = mission.getTotalDroneCount();
-            if (candidates.size() <= totalDrones / 2) {
-                String quorumFail = String.format(
-                        "[CRITICAL] QUORUM_FAIL: Only %d/%d drones reachable. Election aborted. Entering SAFE MODE.",
-                        candidates.size(), totalDrones);
-                log.error(quorumFail);
-                orchestrator.broadcastLog("CRITICAL", quorumFail);
-                broadcastElectionEvent("QUORUM_FAIL", 0, 0, quorumFail);
-                mission.setStatus("PAUSED");
-                return;
-            }
-
-            // ── STEP 4: BULLY ELECTION (with dramatic messages) ──
+            // ── STEP 3: BULLY ELECTION (with dramatic messages) ──
             // The second-highest active drone "initiates" the election
             DroneState highestDrone = candidates.get(0);
             int initiatorId = candidates.size() > 1 ? candidates.get(1).getDroneId() : highestDrone.getDroneId();
@@ -131,6 +118,52 @@ public class LeaderElectionService {
 
             sleep(60);
 
+            // ── STEP 4: QUORUM CHECK (split-brain prevention) ──
+            // Count drones with recent heartbeat (within 1000ms) as "reachable"
+            Instant now = Instant.now();
+            long reachableCount = orchestrator.getDroneRegistry().values().stream()
+                    .filter(d -> !"LOST".equals(d.getStatus()) && d.getRole() != DroneRole.LOST)
+                    .filter(d -> d.getLastHeartbeat() != null
+                            && java.time.Duration.between(d.getLastHeartbeat(), now).toMillis() <= 1000)
+                    .count();
+            long totalActive = orchestrator.getDroneRegistry().values().stream()
+                    .filter(d -> !"LOST".equals(d.getStatus()) && d.getRole() != DroneRole.LOST)
+                    .count();
+
+            // Total active should be at least 1 (the winner itself)
+            if (totalActive == 0)
+                totalActive = 1;
+
+            boolean quorumMet = reachableCount > (totalActive / 2);
+
+            sleep(40);
+
+            if (quorumMet) {
+                String quorumMsg = String.format(
+                        "[INFO] QUORUM_CHECK: %d/%d nodes reachable — quorum confirmed",
+                        reachableCount, totalActive);
+                log.info(quorumMsg);
+                orchestrator.broadcastLog("ELECTION", quorumMsg);
+                broadcastElectionEvent("QUORUM_CHECK", highestDrone.getDroneId(), 0, quorumMsg);
+            } else {
+                String quorumFailMsg = String.format(
+                        "[CRITICAL] QUORUM_FAIL: %d/%d nodes reachable — insufficient quorum, split-brain risk",
+                        reachableCount, totalActive);
+                log.warn(quorumFailMsg);
+                orchestrator.broadcastLog("CRITICAL", quorumFailMsg);
+                broadcastElectionEvent("QUORUM_FAIL", highestDrone.getDroneId(), 0, quorumFailMsg);
+
+                // Abort election — do NOT promote a leader
+                candidates.forEach(d -> d.setRole(DroneRole.FOLLOWER));
+                mission.setStatus("PAUSED");
+                orchestrator.broadcastLog("CRITICAL",
+                        "[SYSTEM] Election aborted — mission PAUSED due to quorum failure");
+                orchestrator.broadcastSwarmState();
+                return;
+            }
+
+            sleep(40);
+
             // Coordinator broadcast
             String coordinatorMsg = String.format("[SUCCESS] NEW_LEADER: Drone_%d confirmed as Swarm Leader",
                     highestDrone.getDroneId());
@@ -157,6 +190,11 @@ public class LeaderElectionService {
 
             // Broadcast full updated state
             orchestrator.broadcastSwarmState();
+
+            // Refresh waypoints so the new leader gets the central path
+            if (mission.getMissionWaypoints() != null && !mission.getMissionWaypoints().isEmpty()) {
+                orchestrator.setMissionWaypoints(mission.getMissionWaypoints());
+            }
 
         } finally {
             electionInProgress.set(false);

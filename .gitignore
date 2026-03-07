@@ -20,8 +20,11 @@ build/
 *.egg
 simulator/venv/
 simulator/.venv/
+.venv/
+venv/
 
 # === Node / React ===
+node_modules/
 frontend/node_modules/
 frontend/dist/
 frontend/.cache/
@@ -36,7 +39,6 @@ Thumbs.db
 desktop.ini
 
 # === IDE ===
-.idea/
 .vscode/
 *.suo
 *.ntvs*

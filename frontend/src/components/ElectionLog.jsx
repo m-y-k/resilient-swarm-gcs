@@ -69,18 +69,21 @@ export default function ElectionLog({ logs }) {
                         {'>'} Awaiting system events...
                     </div>
                 )}
-                {logs.map((log, i) => (
-                    <div key={i} className="log-entry" style={{ color: getLevelColor(log.level) }}>
-                        <span style={{ color: '#4a5568' }}>{'>'} </span>
-                        <span style={{ color: '#6b7280' }}>[{formatTime(log.timestamp)}]</span>
-                        {' '}
-                        <span style={{
-                            fontWeight: (log.level === 'CRITICAL' || log.level === 'SUCCESS') ? 700 : 400,
-                        }}>
-                            {log.message}
-                        </span>
-                    </div>
-                ))}
+                {logs.map((log, i) => {
+                    const isImportant = log.level === 'CRITICAL' || log.level === 'SUCCESS' || log.level === 'ELECTION';
+                    return (
+                        <div key={i} className={isImportant ? 'log-entry-glow' : 'log-entry'} style={{ color: getLevelColor(log.level) }}>
+                            <span style={{ color: '#4a5568' }}>{'>'} </span>
+                            <span style={{ color: '#6b7280' }}>[{formatTime(log.timestamp)}]</span>
+                            {' '}
+                            <span style={{
+                                fontWeight: isImportant ? 700 : 400,
+                            }}>
+                                {log.message}
+                            </span>
+                        </div>
+                    );
+                })}
                 <div ref={bottomRef} />
             </div>
         </div>
