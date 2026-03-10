@@ -15,10 +15,7 @@ export default function ControlPanel({
     const handleWithCooldown = useCallback((action, name, delay = 3000) => {
         if (cooldown === name) return;
 
-        if (name === 'kill-leader') {
-            if (!window.confirm('⚠️ Terminate Leader Drone?\nThis will trigger emergency election.')) return;
-        }
-
+        // Execute immediately with cooldown, no confirmation prompt.
         setCooldown(name);
         action();
         setTimeout(() => setCooldown(null), delay);

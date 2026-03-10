@@ -23,6 +23,8 @@ services:
       - BACKEND_URL=http://backend:8080
       - NUM_DRONES=10
       - HEARTBEAT_INTERVAL_MS=100
+      - UDP_HOST=backend
+      - UDP_PORT=9090
     depends_on:
       backend:
         condition: service_healthy

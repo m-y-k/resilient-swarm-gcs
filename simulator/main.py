@@ -26,9 +26,11 @@ logger = logging.getLogger("simulator")
 # Environment configuration
 BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8080")
 NUM_DRONES = int(os.environ.get("NUM_DRONES", "10"))
-HEARTBEAT_INTERVAL_MS = int(os.environ.get("HEARTBEAT_INTERVAL_MS", "100"))
+HEARTBEAT_INTERVAL_MS = int(os.environ.get("HEARTBEAT_INTERVAL_MS", "200"))
 CENTER_LAT = float(os.environ.get("CENTER_LAT", "28.4595"))
 CENTER_LON = float(os.environ.get("CENTER_LON", "77.5021"))
+UDP_HOST = os.environ.get("UDP_HOST", "127.0.0.1")
+UDP_PORT = int(os.environ.get("UDP_PORT", "9090"))
 
 # Track all drones for kill commands
 drones: dict[int, SimulatedDrone] = {}
@@ -281,7 +283,9 @@ async def main():
                 waypoints=drone_waypoints,
                 session=session,
                 backend_url=BACKEND_URL,
-                heartbeat_interval_ms=HEARTBEAT_INTERVAL_MS
+                heartbeat_interval_ms=HEARTBEAT_INTERVAL_MS,
+                udp_host=UDP_HOST,
+                udp_port=UDP_PORT
             )
             # Pre-load obstacles so pathfinding works from the start
             drone.update_obstacles(obstacle_dicts)

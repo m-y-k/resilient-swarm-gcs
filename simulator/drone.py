@@ -1,10 +1,12 @@
 """
 Single drone simulation coroutine.
-Each instance moves toward waypoints, drains battery, and POSTs telemetry to the backend.
+Each instance moves toward waypoints, drains battery, and sends telemetry via UDP.
 """
 
 import asyncio
+import json
 import math
+import socket
 import time
 import logging
 
@@ -14,9 +16,9 @@ logger = logging.getLogger(__name__)
 
 # Movement parameters by drone type
 DRONE_PARAMS = {
-    "SURVEILLANCE": {"speed": 50.0, "altitude": 120.0},
-    "LOGISTICS":    {"speed": 45.0, "altitude": 80.0},
-    "STRIKE":       {"speed": 50.0, "altitude": 150.0},
+    "SURVEILLANCE": {"speed": 70.0, "altitude": 120.0},
+    "LOGISTICS":    {"speed": 65.0, "altitude": 80.0},
+    "STRIKE":       {"speed": 70.0, "altitude": 150.0},
 }
 
 # 1 degree latitude ≈ 111,320 meters
@@ -38,7 +40,8 @@ def get_drone_type(drone_id):
 
 
 class SimulatedDrone:
-    def __init__(self, drone_id, waypoints, session, backend_url, heartbeat_interval_ms=100):
+    def __init__(self, drone_id, waypoints, session, backend_url, heartbeat_interval_ms=200,
+                 udp_host="127.0.0.1", udp_port=9090):
         self.drone_id = drone_id
         self.drone_type = get_drone_type(drone_id)
         self.params = DRONE_PARAMS[self.drone_type]
@@ -70,6 +73,11 @@ class SimulatedDrone:
         self.heartbeat_interval = heartbeat_interval_ms / 1000.0  # Convert to seconds
         self.is_mission_active = True
 
+        # UDP socket for telemetry (shared across all drones via class-level)
+        self._udp_addr = (udp_host, udp_port)
+        self._udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._udp_sock.setblocking(False)
+
     async def run(self):
         """Main simulation loop — move, drain battery, send telemetry."""
         logger.info(f"Drone_{self.drone_id} ({self.drone_type}) started at ({self.lat:.6f}, {self.lon:.6f})")
@@ -80,8 +88,8 @@ class SimulatedDrone:
                 if self.is_mission_active:
                     self._move_toward_waypoint()
 
-                # 2. Drain battery
-                self.battery -= 0.01
+                # 2. Drain battery (scaled to heartbeat interval)
+                self.battery -= 0.05 * self.heartbeat_interval
                 if self.battery < 10:
                     self.speed = self.params["speed"] * 0.5
                 if self.battery <= 0:
@@ -106,8 +114,8 @@ class SimulatedDrone:
                     "timestamp": int(time.time() * 1000)
                 }
 
-                # 4. POST to backend (fire-and-forget style)
-                await self._send_telemetry(packet)
+                # 4. Send via UDP (fire-and-forget — zero overhead)
+                self._send_telemetry_udp(packet)
 
                 # 5. Increment sequence
                 self.sequence_number += 1
@@ -198,10 +206,6 @@ class SimulatedDrone:
 
                 asyncio.create_task(calc_task())
 
-            # Hover while calculating
-            if self._is_calculating_path:
-                return
-
         # No obstacles in the way — fly directly to waypoint
         distance = self._move_toward_point(target_lat, target_lon)
 
@@ -212,16 +216,13 @@ class SimulatedDrone:
             self._detour_index = 0
             self._direct_path_clear = False  # Re-check path for next waypoint leg
 
-    async def _send_telemetry(self, packet):
-        """POST telemetry to backend. Resilient to backend hiccups."""
+    def _send_telemetry_udp(self, packet):
+        """Send telemetry as a UDP datagram. True fire-and-forget — no handshake, no blocking."""
         try:
-            async with self.session.post(
-                f"{self.backend_url}/api/telemetry",
-                json=packet
-            ) as resp:
-                pass  # Fire and forget
+            data = json.dumps(packet).encode('utf-8')
+            self._udp_sock.sendto(data, self._udp_addr)
         except Exception:
-            pass  # Resilient — don't crash if backend is down
+            pass  # UDP is best-effort — packet loss is acceptable
 
     def kill(self):
         """Simulate drone destruction."""

@@ -48,8 +48,13 @@ export default function useSwarmSocket() {
     }, []);
 
     useEffect(() => {
+        // Derive proper WS URL (supports http/https or ws/wss in env)
+        const brokerURL = WS_URL.startsWith('ws')
+            ? WS_URL
+            : WS_URL.replace(/^http/, 'ws');
+
         const client = new Client({
-            brokerURL: 'ws://localhost:8080/ws',
+            brokerURL,
             reconnectDelay: 3000,
             heartbeatIncoming: 4000,
             heartbeatOutgoing: 4000,

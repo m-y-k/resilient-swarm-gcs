@@ -119,6 +119,12 @@ body {
   background: var(--bg-primary) !important;
 }
 
+/* Smooth drone marker movement — interpolate between telemetry ticks */
+.leaflet-marker-icon,
+.leaflet-marker-shadow {
+  transition: transform 0.2s linear !important;
+}
+
 .leaflet-control-zoom a {
   background: var(--bg-panel) !important;
   color: var(--text-primary) !important;

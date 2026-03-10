@@ -3,6 +3,7 @@ package com.rsgcs.service;
 import com.rsgcs.model.DroneRole;
 import com.rsgcs.model.DroneState;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -12,9 +13,8 @@ import java.time.Instant;
 import java.util.Map;
 
 /**
- * Background heartbeat monitor — sweeps droneRegistry every 200ms.
- * Implements the "3-strike rule": ACTIVE → STALE @500ms → LOST @1000ms.
- * Triggers leader election when the LEADER goes LOST.
+ * Background heartbeat monitor — sweeps droneRegistry on a fixed interval.
+ * Uses configured thresholds to mark drones STALE/LOST and trigger elections.
  */
 @Slf4j
 @Service
@@ -26,6 +26,11 @@ public class HeartbeatMonitor {
     // Heartbeat counter for throttled log broadcasts
     private int heartbeatCycleCount = 0;
 
+    // Thresholds loaded from application.yml (see RS-GCS_Tasks.md Phase 2)
+    // heartbeat-timeout-ms: STALE threshold (e.g. 500ms), LOST is 2x that value.
+    @Value("${rsgcs.heartbeat-timeout-ms:500}")
+    private long heartbeatTimeoutMs;
+
     public HeartbeatMonitor(@Lazy SwarmOrchestrator orchestrator,
             @Lazy LeaderElectionService electionService) {
         this.orchestrator = orchestrator;
@@ -33,10 +38,10 @@ public class HeartbeatMonitor {
     }
 
     /**
-     * Runs every 200ms — checks all drones for heartbeat gaps.
+     * Runs at interval from config — checks all drones for heartbeat gaps.
      * Uses virtual threads (enabled in application.yml).
      */
-    @Scheduled(fixedRate = 200)
+    @Scheduled(fixedRateString = "${rsgcs.heartbeat-check-interval-ms:200}")
     public void checkHeartbeats() {
         Map<Integer, DroneState> registry = orchestrator.getDroneRegistry();
         if (registry.isEmpty())
@@ -47,14 +52,21 @@ public class HeartbeatMonitor {
         int activeCount = 0;
         int staleCount = 0;
 
+        // Derive thresholds from configuration:
+        // STALE when elapsed > heartbeatTimeoutMs (e.g. >500ms)
+        // LOST when elapsed > 2 * heartbeatTimeoutMs (e.g. >1000ms)
+        long staleThresholdMs = heartbeatTimeoutMs;
+        long lostThresholdMs = heartbeatTimeoutMs * 2;
+
         for (DroneState drone : registry.values()) {
+            // Skip drones that are already confirmed LOST (killed or battery dead)
             if ("LOST".equals(drone.getStatus()))
                 continue;
 
             long elapsed = Duration.between(drone.getLastHeartbeat(), now).toMillis();
 
-            if (elapsed > 1000 && !"LOST".equals(drone.getStatus())) {
-                // ── LOST: No heartbeat for >1 second ──
+            if (elapsed > lostThresholdMs) {
+                // ── LOST: No heartbeat beyond configured timeout ──
                 drone.setStatus("LOST");
                 boolean wasLeader = drone.getRole() == DroneRole.LEADER;
                 drone.setRole(DroneRole.LOST);
@@ -68,8 +80,8 @@ public class HeartbeatMonitor {
                     leaderLost = true;
                 }
 
-            } else if (elapsed > 500 && "ACTIVE".equals(drone.getStatus())) {
-                // ── STALE: Heartbeat delayed >500ms ──
+            } else if (elapsed > staleThresholdMs && "ACTIVE".equals(drone.getStatus())) {
+                // ── STALE: Heartbeat delayed beyond stale threshold ──
                 drone.setStatus("STALE");
                 staleCount++;
 
@@ -77,7 +89,7 @@ public class HeartbeatMonitor {
                 log.warn(msg);
                 orchestrator.broadcastLog("WARN", msg);
 
-            } else if (elapsed <= 500 && "STALE".equals(drone.getStatus())) {
+            } else if (elapsed <= staleThresholdMs && "STALE".equals(drone.getStatus())) {
                 // ── RECOVERED from stale ──
                 drone.setStatus("ACTIVE");
                 activeCount++;
@@ -93,9 +105,9 @@ public class HeartbeatMonitor {
             Thread.startVirtualThread(() -> electionService.startElection());
         }
 
-        // Throttled heartbeat summary — every 10th cycle (~2 seconds)
+        // Throttled heartbeat summary — every 5th cycle
         heartbeatCycleCount++;
-        if (heartbeatCycleCount >= 10) {
+        if (heartbeatCycleCount >= 5) {
             heartbeatCycleCount = 0;
             int totalActive = (int) registry.values().stream()
                     .filter(d -> !"LOST".equals(d.getStatus())).count();
@@ -104,8 +116,5 @@ public class HeartbeatMonitor {
                         String.format("[HEARTBEAT] %d drones reporting nominal", totalActive));
             }
         }
-
-        // Periodic swarm state broadcast (~5 times per second via the 200ms interval)
-        orchestrator.broadcastSwarmState();
     }
 }

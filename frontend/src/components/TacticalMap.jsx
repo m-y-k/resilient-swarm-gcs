@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Marker, Polyline, Tooltip, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { getRoleColor, getRoleClass, getDroneColor, TYPE_COLORS } from '../utils/droneIcons';
@@ -25,20 +25,31 @@ function MapClickHandler({ planningMode, obstacleMode, spawnMode, onMapClick }) 
 }
 
 /**
- * Component to auto-fit map bounds around active drones.
+ * Component to smoothly pan the map to follow the swarm centroid.
+ * Uses panTo instead of fitBounds to avoid jarring zoom resets.
  */
 function SwarmTracker({ drones, isFollowing }) {
     const map = useMap();
+    const lastPanRef = useRef(0);
 
     useEffect(() => {
         if (!isFollowing) return;
 
+        // Throttle panning to once per second for smooth continuous tracking
+        const now = Date.now();
+        if (now - lastPanRef.current < 1000) return;
+        lastPanRef.current = now;
+
         const activeDrones = Object.values(drones || {}).filter(d => d.status !== 'LOST' && d.role !== 'LOST');
         if (activeDrones.length === 0) return;
 
-        const coords = activeDrones.map(d => [d.latitude, d.longitude]);
+        // Calculate swarm centroid (average position)
+        const sumLat = activeDrones.reduce((s, d) => s + d.latitude, 0);
+        const sumLon = activeDrones.reduce((s, d) => s + d.longitude, 0);
+        const centerLat = sumLat / activeDrones.length;
+        const centerLon = sumLon / activeDrones.length;
 
-        map.fitBounds(coords, { padding: [60, 60], maxZoom: 17, animate: true, duration: 0.5 });
+        map.panTo([centerLat, centerLon], { animate: true, duration: 0.8, easeLinearity: 0.5 });
     }, [drones, isFollowing, map]);
 
     return null;
@@ -102,6 +113,8 @@ export default function TacticalMap({
     showObstacles,
     onMapClick
 }) {
+    // Start with FOLLOW SWARM on by default so the map tracks drone movement.
+    // Operators can disable it via the checkbox to freely pan the map.
     const [isFollowing, setIsFollowing] = useState(true);
     const droneList = useMemo(() => Object.values(drones || {}), [drones]);
 

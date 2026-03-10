@@ -119,12 +119,12 @@ public class LeaderElectionService {
             sleep(60);
 
             // ── STEP 4: QUORUM CHECK (split-brain prevention) ──
-            // Count drones with recent heartbeat (within 1000ms) as "reachable"
+            // Count drones with recent heartbeat (within 3s) as "reachable"
             Instant now = Instant.now();
             long reachableCount = orchestrator.getDroneRegistry().values().stream()
                     .filter(d -> !"LOST".equals(d.getStatus()) && d.getRole() != DroneRole.LOST)
                     .filter(d -> d.getLastHeartbeat() != null
-                            && java.time.Duration.between(d.getLastHeartbeat(), now).toMillis() <= 1000)
+                            && java.time.Duration.between(d.getLastHeartbeat(), now).toMillis() <= 3000)
                     .count();
             long totalActive = orchestrator.getDroneRegistry().values().stream()
                     .filter(d -> !"LOST".equals(d.getStatus()) && d.getRole() != DroneRole.LOST)
@@ -183,18 +183,16 @@ public class LeaderElectionService {
             mission.setElectionCount(mission.getElectionCount() + 1);
 
             // ── STEP 6: MISSION CONTINUITY ──
-            String syncMsg = String.format("[INFO] MISSION_SYNC: Swarm pivoting to Drone_%d command vector",
+            // Drones keep their current waypoints and progress — no redistribution.
+            // Only the leader role changes; all drones continue navigating from their
+            // current position toward their current waypoint index.
+            String syncMsg = String.format("[INFO] MISSION_SYNC: Swarm pivoting to Drone_%d command — all drones continue mission",
                     highestDrone.getDroneId());
             log.info(syncMsg);
             orchestrator.broadcastLog("INFO", syncMsg);
 
             // Broadcast full updated state
             orchestrator.broadcastSwarmState();
-
-            // Refresh waypoints so the new leader gets the central path
-            if (mission.getMissionWaypoints() != null && !mission.getMissionWaypoints().isEmpty()) {
-                orchestrator.setMissionWaypoints(mission.getMissionWaypoints());
-            }
 
         } finally {
             electionInProgress.set(false);

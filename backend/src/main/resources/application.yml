@@ -7,10 +7,15 @@ server:
   port: 8080
 
 rsgcs:
-  heartbeat-timeout-ms: 500
+  # More tolerant heartbeat timeout to avoid false LOST/RECONNECT
+  # with Docker and A* pathfinding load. STALE > 1500ms, LOST > 3000ms.
+  heartbeat-timeout-ms: 1500
   heartbeat-check-interval-ms: 200
+  # High-frequency swarm broadcast interval for smooth map updates
+  broadcast-interval-ms: 100
   max-drones: 10
   election-timeout-ms: 300
+  udp-port: 9090
 
 management:
   endpoints:

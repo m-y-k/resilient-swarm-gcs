@@ -33,7 +33,7 @@ public class SwarmOrchestrator {
 
     // Track last N positions for path trails on the map
     private final Map<Integer, List<double[]>> positionHistory = new ConcurrentHashMap<>();
-    private static final int MAX_TRAIL_LENGTH = 10;
+    private static final int MAX_TRAIL_LENGTH = 30;
 
     // Obstacles — pre-loaded with Greater Noida landmarks
     private final List<Obstacle> obstacles = new CopyOnWriteArrayList<>(createDefaultObstacles());
@@ -89,13 +89,15 @@ public class SwarmOrchestrator {
                     packet.getSequenceNumber());
         }
 
-        // If drone was LOST and is now sending again
+        // If drone was LOST (from heartbeat timeout) and is now sending again — reconnect it
+        // But never resurrect explicitly killed drones (they're already filtered above)
         if ("LOST".equals(drone.getStatus()) || drone.getRole() == DroneRole.LOST) {
-            drone.setRole(DroneRole.FOLLOWER);
-            drone.setStatus("ACTIVE");
+            // Only log reconnection once (avoid spamming on every packet)
             String msg = String.format("[RECONNECT] Drone_%d RECONNECTED — resuming as FOLLOWER", id);
             log.info(msg);
             broadcastLog("INFO", msg);
+            drone.setRole(DroneRole.FOLLOWER);
+            drone.setStatus("ACTIVE");
             missionState.setActiveDroneCount((int) droneRegistry.values().stream()
                     .filter(d -> !"LOST".equals(d.getStatus())).count());
         }
