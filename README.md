@@ -30,7 +30,14 @@ In autonomous drone swarms, **leader failure is inevitable**. A single point of 
 
 ## 🎬 Demo
 
-[Watch the failover demo →](https://www.loom.com/share/3960f208f84f4b8ca3551b7802f58090)
+<div>
+    <a href="https://www.loom.com/share/3960f208f84f4b8ca3551b7802f58090">
+      <p>Resilient Swarm GCS: Fault-Tolerant Ground Control for Multi-Drone Systems. - Watch Video</p>
+    </a>
+    <a href="https://www.loom.com/share/3960f208f84f4b8ca3551b7802f58090">
+      <img style="max-width:300px;" src="https://www.loom.com/v1/videos/3960f208f84f4b8ca3551b7802f58090/thumbnail.gif">
+    </a>
+  </div>
 
 *Live leader election triggered by killing the current leader — watch the Election Log Terminal and tactical map update in real time.*
 
