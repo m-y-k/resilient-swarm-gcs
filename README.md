@@ -28,6 +28,14 @@ In autonomous drone swarms, **leader failure is inevitable**. A single point of 
 
 ---
 
+## 🎬 Demo
+
+[Watch the failover demo →](https://www.loom.com/share/3960f208f84f4b8ca3551b7802f58090)
+
+*Live leader election triggered by killing the current leader — watch the Election Log Terminal and tactical map update in real time.*
+
+---
+
 ## 🏗️ Architecture
 
 ```
@@ -64,6 +72,47 @@ In autonomous drone swarms, **leader failure is inevitable**. A single point of 
 
   Topics:  /topic/drones  /topic/mission  /topic/logs  /topic/events
 ```
+
+*Hub-and-spoke topology — the orchestrator broadcasts one-way over STOMP, and no drone depends on a two-way handshake to receive telemetry or commands.*
+
+---
+
+## 🧠 Design Decisions & Reasoning
+
+### Why Bully Algorithm over Raft or a static leader
+
+Three approaches were on the table:
+
+**Static leader** — simplest option, but a single point of failure. If the designated leader drone goes down, the entire mission loses coordination with no recovery path.
+
+**Raft** — strong consistency guarantees, but impractical to scale cleanly. Beyond a certain swarm size (1000+ nodes), a single-round election doesn't hold up — you'd need multi-level/hierarchical elections, which adds latency exactly where it can least be afforded.
+
+**Bully Algorithm** — the right fit here: no two-way coordination overhead, elections resolve fast, and the highest-priority surviving node simply takes over. The leader broadcasts one-way — no request/acknowledge round trip — which matters when every millisecond of delay affects real-time flight coordination.
+
+**Trade-off accepted:** Bully assumes relatively reliable message delivery. For this swarm's scale and communication range, that assumption holds; a quorum check (Raft-inspired) was layered on top specifically to catch the split-brain case Bully alone doesn't handle.
+
+### Failover performance (<500ms)
+
+Measured by crashing a drone process and timing re-election — software-level testing, not hardware flight tests. The result wasn't a specific optimization target; it fell out naturally from the one-way broadcast design — no acknowledgment round trips means the failure-detection-to-new-leader path stays short by construction.
+
+### Why Java 21 Virtual Threads
+
+Before Virtual Threads, each drone's constant 10Hz telemetry stream meant a growing number of platform threads — expensive enough to visibly slow the orchestrator, and painful to manage manually as swarm size grew. Virtual Threads removed that ceiling: non-blocking heartbeat monitoring and high-concurrency telemetry handling without the overhead of traditional thread pool management.
+
+### Path planning — per-drone, not centralized
+
+Each drone runs its own tangent-point obstacle avoidance rather than a single centrally-computed path. This is necessary because drones maintain relative/parallel distance from each other for formation flying — paths can't be computed once centrally; they need to account for each drone's relative positioning in real time. Static obstacles trigger real-time recalculation, balancing shortest-path efficiency against the cost of recomputing mid-flight.
+
+| Decision | Rationale |
+|----------|-----------|
+| **Bully Algorithm** over Raft | Simpler to implement + visualize for a demo; highest-ID always wins |
+| **Virtual Threads** (Java 21) | Non-blocking heartbeat monitoring without thread pool management |
+| **ConcurrentHashMap** for state | Lock-free reads from WebSocket broadcast threads |
+| **STOMP over raw WS** | Topic-based pub/sub with SockJS fallback for browser compatibility |
+| **10 Hz telemetry** | Smooth map movement without overwhelming the backend |
+| **Quorum check** | Prevents split-brain — election aborts if <50% drones reachable |
+| **Tangent-point avoidance** | Computes left/right tangent points on obstacle circles, picks shorter path |
+| **Formation offsets** | Leader flies exact waypoints; followers fly perpendicular offsets by index |
 
 ---
 
@@ -132,7 +181,7 @@ Open [http://localhost:5173](http://localhost:5173)
 
 ---
 
-## 🎬 Demo: The "Money Shot"
+## 🎬 Demo Walkthrough: The "Money Shot"
 
 The signature demo flow that showcases the entire system:
 
@@ -190,21 +239,6 @@ RS-GCS/
 
 ---
 
-## 🧠 Design Decisions
-
-| Decision | Rationale |
-|----------|-----------|
-| **Bully Algorithm** over Raft | Simpler to implement + visualize for a demo; highest-ID always wins |
-| **Virtual Threads** (Java 21) | Non-blocking heartbeat monitoring without thread pool management |
-| **ConcurrentHashMap** for state | Lock-free reads from WebSocket broadcast threads |
-| **STOMP over raw WS** | Topic-based pub/sub with SockJS fallback for browser compatibility |
-| **10 Hz telemetry** | Smooth map movement without overwhelming the backend |
-| **Quorum check** | Prevents split-brain — election aborts if <50% drones reachable |
-| **Tangent-point avoidance** | Computes left/right tangent points on obstacle circles, picks shorter path |
-| **Formation offsets** | Leader flies exact waypoints; followers fly perpendicular offsets by index |
-
----
-
 ## ⚠️ Known Limitations
 
 - **Simulator-only** — No real MAVLink drone integration yet
@@ -224,6 +258,14 @@ RS-GCS/
 - [ ] Multi-swarm support with inter-swarm communication
 - [ ] Prometheus + Grafana monitoring
 - [ ] Kubernetes Helm chart deployment
+
+---
+
+## 💡 What I Learned
+
+Consensus is straightforward on paper — the hard part is latency in practice. Even with a fast algorithm, real coordination exposes edge cases that diagrams don't show. Virtual Threads, on the other hand, made concurrent telemetry handling far easier than expected going in.
+
+This project also raised a broader question worth exploring next: how do autonomous systems actually communicate under real-world constraints — jammed networks, latency spikes, GPS-based geo-location vs. pre-fed coordinates and pre-planned paths. Different vehicle types (drones, humanoids, ground vehicles) operate at different speeds and altitudes, which raises an interesting architectural question — could a single ground control system eventually coordinate heterogeneous autonomous units performing a shared mission without human intervention? That's the direction this project points toward next.
 
 ---
 
